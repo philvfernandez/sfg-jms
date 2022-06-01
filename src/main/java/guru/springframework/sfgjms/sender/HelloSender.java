@@ -1,12 +1,18 @@
 package guru.springframework.sfgjms.sender;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import guru.springframework.sfgjms.config.JmsConfig;
 import guru.springframework.sfgjms.model.HelloWorldMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jms.core.JmsTemplate;
+import org.springframework.jms.core.MessageCreator;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.Session;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -14,10 +20,10 @@ import java.util.UUID;
 public class HelloSender {
 
     private final JmsTemplate jmsTemplate;
+    private final ObjectMapper objectMapper;
 
     @Scheduled(fixedRate = 2000)
     public void sendMessage() {
-        System.out.println("Hello World.  I am sending a message!");
 
         HelloWorldMessage message = HelloWorldMessage
                 .builder()
@@ -30,4 +36,35 @@ public class HelloSender {
         System.out.println("Message has been sent!!");
 
     }
+
+    @Scheduled(fixedRate = 2000)
+    public void sendReceiveMessage() throws JMSException {
+
+        HelloWorldMessage message = HelloWorldMessage
+                .builder()
+                .id(UUID.randomUUID())
+                .message("Hello")
+                .build();
+
+        Message receiveMsg = jmsTemplate.sendAndReceive(JmsConfig.MY_SEND_RCV_QUEUE, new MessageCreator() {
+            @Override
+            public Message createMessage(Session session) throws JMSException {
+                Message helloMessage = null;
+                try {
+                    helloMessage = session.createTextMessage(objectMapper.writeValueAsString(message));
+                    helloMessage.setStringProperty("_type", "guru.springframework.sfgjms.model.HelloWorldMessage");
+
+                    System.out.println("Sending message back");
+
+                    return helloMessage;
+                } catch (JsonProcessingException e) {
+                    throw new JMSException("Boom!");
+                }
+            }
+        });
+
+        System.out.println(receiveMsg.getBody(String.class));
+
+    }
+
 }
